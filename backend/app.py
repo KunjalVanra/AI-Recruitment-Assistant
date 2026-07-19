@@ -4,7 +4,12 @@ import shutil
 import json
 from groq_service import analyze_resume
 from parser import extract_text_from_pdf
-from scoring_service import calculate_skill_match
+from scoring_service import (
+    calculate_skill_match,
+    calculate_experience_score,
+    calculate_education_score,
+    calculate_overall_score
+)
 
 app = FastAPI(title="AI Recruitment Assistant")
 
@@ -66,3 +71,51 @@ def score_candidate(data: ScoreRequest):
     )
 
     return result
+
+from pydantic import BaseModel
+
+
+class RankRequest(BaseModel):
+    candidate_skills: list[str]
+    required_skills: list[str]
+    experience_years: int
+    degree: str
+
+
+
+@app.post("/rank_candidate")
+def rank_candidate(data: RankRequest):
+
+    # 1. Calculate skill score
+    skill_result = calculate_skill_match(
+        data.candidate_skills,
+        data.required_skills
+    )
+
+
+    # 2. Calculate experience score
+    experience_score = calculate_experience_score(
+        data.experience_years
+    )
+
+
+    # 3. Calculate education score
+    education_score = calculate_education_score(
+        data.degree
+    )
+
+
+    # 4. Calculate overall score
+    overall_result = calculate_overall_score(
+        skill_result["skills_match"],
+        experience_score,
+        education_score
+    )
+
+
+    return {
+        **skill_result,
+        "experience_score": experience_score,
+        "education_score": education_score,
+        **overall_result
+    }
