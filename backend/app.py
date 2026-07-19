@@ -153,3 +153,89 @@ def match_candidate(data: MatchRequest):
         "required_skills": required_skills,
         **skill_result
     }
+
+class EvaluateRequest(BaseModel):
+    candidate_analysis: dict
+    job_description: str
+
+
+
+@app.post("/evaluate_candidate")
+def evaluate_candidate(data: EvaluateRequest):
+
+    candidate = data.candidate_analysis
+
+
+    # Extract job requirements
+    job_analysis = extract_job_skills(
+        data.job_description
+    )
+
+
+    required_skills = job_analysis["required_skills"]
+
+
+    # Candidate skills
+    candidate_skills = candidate.get(
+        "Skills",
+        []
+    )
+
+
+    # Skill matching
+    skill_result = calculate_skill_match(
+        candidate_skills,
+        required_skills
+    )
+
+
+    # Experience extraction
+    experience_score = calculate_experience_score(
+        1
+    )
+
+
+    # Education extraction
+    education = candidate.get(
+        "Education",
+        []
+    )
+
+
+    if education:
+
+        degree = education[0].get(
+            "Degree",
+            ""
+        )
+
+    else:
+        degree = ""
+
+
+    education_score = calculate_education_score(
+        degree
+    )
+
+
+    # Overall score
+    overall_result = calculate_overall_score(
+        skill_result["skills_match"],
+        experience_score,
+        education_score
+    )
+
+
+    return {
+
+        "job_requirements": job_analysis,
+
+        **skill_result,
+
+        "experience_score": experience_score,
+
+        "education_score": education_score,
+
+        **overall_result
+
+    }
