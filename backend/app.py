@@ -190,8 +190,14 @@ def evaluate_candidate(data: EvaluateRequest):
 
 
     # Experience extraction
+    experience_years = candidate.get(
+    "experience_years",
+    0
+    )
+
+
     experience_score = calculate_experience_score(
-        1
+        experience_years
     )
 
 

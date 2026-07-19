@@ -46,4 +46,14 @@ Job Description:
     )
 
 
-    return json.loads(clean)
+    try:
+        return json.loads(clean)
+
+    except json.JSONDecodeError:
+
+        start = clean.find("{")
+        end = clean.rfind("}") + 1
+
+        json_text = clean[start:end]
+
+        return json.loads(json_text)
