@@ -3,6 +3,7 @@ import os
 import shutil
 import json
 from groq_service import analyze_resume
+from job_service import extract_job_skills
 from parser import extract_text_from_pdf
 from scoring_service import (
     calculate_skill_match,
@@ -118,4 +119,37 @@ def rank_candidate(data: RankRequest):
         "experience_score": experience_score,
         "education_score": education_score,
         **overall_result
+    }
+
+from pydantic import BaseModel
+
+
+class MatchRequest(BaseModel):
+    candidate_skills: list[str]
+    job_description: str
+
+
+
+@app.post("/match_candidate")
+def match_candidate(data: MatchRequest):
+
+    # Extract skills from job description
+    job_analysis = extract_job_skills(
+        data.job_description
+    )
+
+
+    required_skills = job_analysis["required_skills"]
+
+
+    # Compare candidate skills with job skills
+    skill_result = calculate_skill_match(
+        data.candidate_skills,
+        required_skills
+    )
+
+
+    return {
+        "required_skills": required_skills,
+        **skill_result
     }
