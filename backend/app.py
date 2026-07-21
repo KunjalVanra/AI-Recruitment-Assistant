@@ -1,18 +1,20 @@
 from fastapi import FastAPI, UploadFile, File, Query
 import os
+import ast
 import shutil
 import json
 from groq_service import analyze_resume
 from job_service import extract_job_skills
 from database import engine
 from database import SessionLocal
-from models import Base, Candidate
+from models import Base, Candidate, Job, CandidateRanking
 from parser import extract_text_from_pdf
 from scoring_service import (
     calculate_skill_match,
     calculate_experience_score,
     calculate_education_score,
-    calculate_overall_score
+    calculate_overall_score,
+    calculate_total_experience
 )
 
 app = FastAPI(title="AI Recruitment Assistant")
@@ -139,6 +141,8 @@ def get_candidates(
     db.close()
 
     return result
+
+
 
 @app.get("/candidate/{candidate_id}")
 def get_candidate(candidate_id: int):
@@ -342,6 +346,9 @@ class ScoreRequest(BaseModel):
     candidate_skills: list[str]
     required_skills: list[str]
 
+class JobRequest(BaseModel):
+    title: str
+    description: str
 
 @app.post("/score_candidate")
 def score_candidate(data: ScoreRequest):
@@ -399,6 +406,250 @@ def rank_candidate(data: RankRequest):
         "experience_score": experience_score,
         "education_score": education_score,
         **overall_result
+    }
+
+@app.post("/jobs")
+def create_job(data: JobRequest):
+
+    db = SessionLocal()
+
+    # Extract job requirements using AI/service
+    job_analysis = extract_job_skills(
+        data.description
+    )
+
+    job = Job(
+        title=data.title,
+        description=data.description,
+        required_skills=", ".join(
+            job_analysis["required_skills"]
+        ),
+        experience_requirement=
+        job_analysis.get(
+            "experience_requirement",
+            "Not specified"
+        ),
+        education_requirement=
+        job_analysis.get(
+            "education_requirement",
+            "Not specified"
+        )
+    )
+
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    db.close()
+
+    return {
+        "message": "Job created successfully",
+        "job_id": job.id,
+        "job_details": {
+            "title": job.title,
+            "required_skills": job.required_skills
+        }
+    }
+
+@app.get("/jobs")
+def get_jobs():
+
+    db = SessionLocal()
+
+    jobs = db.query(Job).all()
+
+    result = []
+
+    for job in jobs:
+        result.append({
+            "id": job.id,
+            "title": job.title,
+            "description": job.description,
+            "required_skills": job.required_skills,
+            "experience_requirement": job.experience_requirement,
+            "education_requirement": job.education_requirement
+        })
+
+    db.close()
+
+    return result
+
+@app.get("/jobs/{job_id}/rankings")
+def job_candidate_rankings(job_id: int):
+
+    db = SessionLocal()
+
+    # Get selected job
+    job = (
+        db.query(Job)
+        .filter(Job.id == job_id)
+        .first()
+    )
+
+    if not job:
+        db.close()
+        return {
+            "message": "Job not found"
+        }
+
+
+    # Convert job skills string to list
+    required_skills = [
+        skill.strip()
+        for skill in job.required_skills.split(",")
+    ]
+
+
+    candidates = db.query(Candidate).all()
+
+    rankings = []
+
+
+    for candidate in candidates:
+
+
+        candidate_skills = [
+            skill.strip()
+            for skill in candidate.skills.split(",")
+        ]
+
+
+        # Skill matching
+        skill_result = calculate_skill_match(
+            candidate_skills,
+            required_skills
+        )
+
+
+        
+        # Calculate real experience
+
+
+
+        experience_data = []
+
+        if candidate.experience:
+
+            try:
+                experience_data = ast.literal_eval(
+                    candidate.experience
+                )
+
+            except:
+                experience_data = []
+
+
+        total_experience = calculate_total_experience(
+            experience_data
+        )
+
+
+        experience_score = calculate_experience_score(
+            total_experience
+        )
+
+
+        # Education score
+        education_data = []
+
+        if candidate.education:
+
+            try:
+                education_data = ast.literal_eval(
+                    candidate.education
+                )
+
+            except:
+                education_data = []
+
+
+        degree = ""
+
+
+        if education_data:
+
+            degree = education_data[0].get(
+                "Degree",
+                ""
+            )
+
+
+        education_score = calculate_education_score(
+            degree
+        )
+        
+
+
+        # Overall score
+        overall = calculate_overall_score(
+            skill_result["skills_match"],
+            experience_score,
+            education_score
+        )
+
+        existing_ranking = db.query(
+            CandidateRanking
+        ).filter(
+            CandidateRanking.candidate_id == candidate.id,
+            CandidateRanking.job_id == job.id
+        ).first()
+
+
+        if existing_ranking:
+
+            existing_ranking.overall_score = (
+                overall["overall_score"]
+            )
+
+            existing_ranking.recommendation = (
+                overall["recommendation"]
+            )
+
+
+        else:
+            ranking_record = CandidateRanking(
+                candidate_id=candidate.id,
+                job_id=job.id,
+                overall_score=overall["overall_score"],
+                recommendation=overall["recommendation"]
+            )
+
+            db.add(ranking_record)
+
+
+        db.commit()
+         
+
+        rankings.append({
+
+            "candidate_id": candidate.id,
+
+            "name": candidate.name,
+
+            "skills_match":
+            skill_result["skills_match"],
+
+            "overall_score":
+            overall["overall_score"],
+
+            "recommendation":
+            overall["recommendation"]
+
+        })
+
+    job_title = job.title
+    db.close()
+
+
+    rankings.sort(
+        key=lambda x: x["overall_score"],
+        reverse=True
+    )
+
+
+    return {
+        "job": job_title,
+        "rankings": rankings
     }
 
 from pydantic import BaseModel
@@ -523,5 +774,65 @@ def evaluate_candidate(data: EvaluateRequest):
         "education_score": education_score,
 
         **overall_result
+
+    }
+
+@app.get("/dashboard/stats")
+def dashboard_stats():
+
+    db = SessionLocal()
+
+
+    total_candidates = db.query(
+        Candidate
+    ).count()
+
+
+    total_jobs = db.query(
+        Job
+    ).count()
+
+
+
+    strong_candidates = db.query(
+        CandidateRanking
+    ).filter(
+        CandidateRanking.overall_score >= 85
+    ).count()
+
+
+
+    good_candidates = db.query(
+        CandidateRanking
+    ).filter(
+        CandidateRanking.overall_score >= 70,
+        CandidateRanking.overall_score < 85
+    ).count()
+
+
+
+    average_candidates = db.query(
+        CandidateRanking
+    ).filter(
+        CandidateRanking.overall_score >= 50,
+        CandidateRanking.overall_score < 70
+    ).count()
+
+
+
+    db.close()
+
+
+    return {
+
+        "total_candidates": total_candidates,
+
+        "total_jobs": total_jobs,
+
+        "strong_candidates": strong_candidates,
+
+        "good_candidates": good_candidates,
+
+        "average_candidates": average_candidates
 
     }

@@ -105,3 +105,29 @@ def calculate_overall_score(
         "overall_score": round(overall,2),
         "recommendation": recommendation
     }
+
+def calculate_total_experience(experience_data):
+
+    total_years = 0
+
+
+    if not experience_data:
+        return 0
+
+
+    try:
+
+        for exp in experience_data:
+
+            years = exp.get("Years")
+
+            if years:
+                total_years += float(years)
+
+
+    except Exception:
+
+        return 0
+
+
+    return total_years
