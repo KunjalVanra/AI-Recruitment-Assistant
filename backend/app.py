@@ -1,9 +1,12 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Query
 import os
 import shutil
 import json
 from groq_service import analyze_resume
 from job_service import extract_job_skills
+from database import engine
+from database import SessionLocal
+from models import Base, Candidate
 from parser import extract_text_from_pdf
 from scoring_service import (
     calculate_skill_match,
@@ -13,6 +16,7 @@ from scoring_service import (
 )
 
 app = FastAPI(title="AI Recruitment Assistant")
+Base.metadata.create_all(bind=engine)
 
 
 UPLOAD_FOLDER = "uploads"
@@ -30,30 +34,306 @@ def home():
 @app.post("/upload_resume")
 async def upload_resume(file: UploadFile = File(...)):
 
-    file_path = os.path.join(
-        UPLOAD_FOLDER,
-        file.filename
+    # Save uploaded PDF
+    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Extract text from PDF
+    extracted_text = extract_text_from_pdf(file_path)
+
+    # Analyze resume using Groq
+    analysis = analyze_resume(extracted_text)
+
+    # Convert JSON string to Python dictionary
+    if isinstance(analysis, str):
+        clean_analysis = (
+            analysis
+            .replace("```json", "")
+            .replace("```", "")
+            .strip()
+        )
+
+        analysis = json.loads(clean_analysis)
+
+    db = SessionLocal()
+
+    # Check if candidate already exists
+    existing_candidate = (
+        db.query(Candidate)
+        .filter(Candidate.email == analysis.get("Email"))
+        .first()
+    )
+
+    if existing_candidate:
+        db.close()
+        return {
+            "message": "Candidate already exists",
+            "candidate_id": existing_candidate.id
+        }
+
+    # Create new candidate
+    candidate = Candidate(
+        name=analysis.get("Name"),
+        email=analysis.get("Email"),
+        phone=analysis.get("Phone"),
+        skills=", ".join(analysis.get("Skills", [])),
+        education=str(analysis.get("Education")),
+        experience=str(analysis.get("Experience")),
+        resume_file=file.filename
+    )
+
+    db.add(candidate)
+    db.commit()
+    db.refresh(candidate)
+    db.close()
+
+    return {
+        "message": "Resume uploaded successfully",
+        "candidate_id": candidate.id,
+        "resume_analysis": analysis
+    }
+
+
+@app.get("/candidates")
+def get_candidates(
+    skill: str = Query(None),
+    name: str = Query(None),
+    experience: str = Query(None)
+):
+
+    db = SessionLocal()
+
+    query = db.query(Candidate)
+
+    if skill:
+        query = query.filter(
+            Candidate.skills.ilike(f"%{skill}%")
+        )
+
+    if name:
+        query = query.filter(
+            Candidate.name.ilike(f"%{name}%")
+        )
+
+    if experience:
+        query = query.filter(
+            Candidate.experience.ilike(f"%{experience}%")
+        )
+
+    candidates = query.all()
+
+    result = []
+
+    for candidate in candidates:
+        result.append({
+            "id": candidate.id,
+            "name": candidate.name,
+            "email": candidate.email,
+            "phone": candidate.phone,
+            "skills": candidate.skills,
+            "experience": candidate.experience
+        })
+
+    db.close()
+
+    return result
+
+@app.get("/candidate/{candidate_id}")
+def get_candidate(candidate_id: int):
+
+    db = SessionLocal()
+
+    candidate = (
+        db.query(Candidate)
+        .filter(Candidate.id == candidate_id)
+        .first()
+    )
+
+    if not candidate:
+        db.close()
+        return {
+            "message": "Candidate not found"
+        }
+
+    result = {
+        "id": candidate.id,
+        "name": candidate.name,
+        "email": candidate.email,
+        "phone": candidate.phone,
+        "skills": candidate.skills,
+        "education": candidate.education,
+        "experience": candidate.experience,
+        "resume_file": candidate.resume_file
+    }
+
+    db.close()
+
+    return result
+
+from pydantic import BaseModel
+
+
+class CandidateUpdate(BaseModel):
+    phone: str | None = None
+    skills: str | None = None
+    education: str | None = None
+    experience: str | None = None
+
+
+@app.put("/candidate/{candidate_id}")
+def update_candidate(
+    candidate_id: int,
+    data: CandidateUpdate
+):
+
+    db = SessionLocal()
+
+    candidate = (
+        db.query(Candidate)
+        .filter(Candidate.id == candidate_id)
+        .first()
     )
 
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(
-            file.file,
-            buffer
+    if not candidate:
+        db.close()
+        return {
+            "message": "Candidate not found"
+        }
+
+
+    if data.phone:
+        candidate.phone = data.phone
+
+    if data.skills:
+        candidate.skills = data.skills
+
+    if data.education:
+        candidate.education = data.education
+
+    if data.experience:
+        candidate.experience = data.experience
+
+
+    db.commit()
+    db.refresh(candidate)
+
+    db.close()
+
+
+    return {
+        "message": "Candidate updated successfully",
+        "candidate_id": candidate_id
+    }
+
+@app.delete("/candidate/{candidate_id}")
+def delete_candidate(candidate_id: int):
+
+    db = SessionLocal()
+
+    candidate = (
+        db.query(Candidate)
+        .filter(Candidate.id == candidate_id)
+        .first()
+    )
+
+    if not candidate:
+        db.close()
+        return {
+            "message": "Candidate not found"
+        }
+
+
+    db.delete(candidate)
+    db.commit()
+
+    db.close()
+
+
+    return {
+        "message": "Candidate deleted successfully",
+        "candidate_id": candidate_id
+    }
+
+@app.get("/rankings")
+def get_rankings():
+
+    db = SessionLocal()
+
+    candidates = db.query(Candidate).all()
+
+    rankings = []
+
+
+    for candidate in candidates:
+
+        # Convert stored skills string into list
+        candidate_skills = [
+            skill.strip()
+            for skill in candidate.skills.split(",")
+        ]
+
+
+        # For now, compare against common backend skills
+        required_skills = [
+            "Python",
+            "FastAPI",
+            "SQL",
+            "AWS"
+        ]
+
+
+        # Skill score
+        skill_result = calculate_skill_match(
+            candidate_skills,
+            required_skills
         )
 
 
-    extracted_text = extract_text_from_pdf(file_path)
+        # Experience score
+        experience_score = 0
+
+        if candidate.experience:
+            experience_score = calculate_experience_score(
+                2
+            )
 
 
-    analysis = analyze_resume(extracted_text)
+        # Education score
+        education_score = calculate_education_score(
+            candidate.education
+        )
 
-    clean_analysis = analysis.replace("```json", "").replace("```", "").strip()
 
-    return {
-        "filename": file.filename,
-        "resume_analysis": json.loads(clean_analysis)
-    }
+        # Overall score
+        overall = calculate_overall_score(
+            skill_result["skills_match"],
+            experience_score,
+            education_score
+        )
+
+
+        rankings.append({
+            "id": candidate.id,
+            "name": candidate.name,
+            "overall_score": overall["overall_score"],
+            "recommendation": overall["recommendation"]
+        })
+
+
+    db.close()
+
+
+    # Sort highest score first
+    rankings.sort(
+        key=lambda x: x["overall_score"],
+        reverse=True
+    )
+
+
+    return rankings
 
 from pydantic import BaseModel
 
