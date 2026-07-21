@@ -5,9 +5,8 @@ import shutil
 import json
 from groq_service import analyze_resume
 from job_service import extract_job_skills
-from database import engine
-from database import SessionLocal
-from models import Base, Candidate, Job, CandidateRanking
+from database import engine, SessionLocal
+from models import Base, Candidate, Job, CandidateRanking, Application, Recruiter
 from parser import extract_text_from_pdf
 from scoring_service import (
     calculate_skill_match,
@@ -16,6 +15,8 @@ from scoring_service import (
     calculate_overall_score,
     calculate_total_experience
 )
+from auth import hash_password
+
 
 app = FastAPI(title="AI Recruitment Assistant")
 Base.metadata.create_all(bind=engine)
@@ -369,6 +370,11 @@ class RankRequest(BaseModel):
     experience_years: int
     degree: str
 
+class RecruiterRequest(BaseModel):
+
+    name: str
+    email: str
+    password: str
 
 
 @app.post("/rank_candidate")
@@ -834,5 +840,397 @@ def dashboard_stats():
         "good_candidates": good_candidates,
 
         "average_candidates": average_candidates
+
+    }
+
+@app.get("/jobs/{job_id}/top_candidates")
+def top_candidates(job_id: int):
+
+    db = SessionLocal()
+
+
+    job = (
+        db.query(Job)
+        .filter(Job.id == job_id)
+        .first()
+    )
+
+
+    if not job:
+
+        db.close()
+
+        return {
+            "message": "Job not found"
+        }
+
+
+
+    rankings = (
+        db.query(CandidateRanking)
+        .filter(
+            CandidateRanking.job_id == job_id
+        )
+        .order_by(
+            CandidateRanking.overall_score.desc()
+        )
+        .limit(5)
+        .all()
+    )
+
+
+    result = []
+
+
+    for ranking in rankings:
+
+
+        candidate = (
+            db.query(Candidate)
+            .filter(
+                Candidate.id == ranking.candidate_id
+            )
+            .first()
+        )
+
+
+        result.append({
+
+            "candidate_id": candidate.id,
+
+            "name": candidate.name,
+
+            "email": candidate.email,
+
+            "score": ranking.overall_score,
+
+            "recommendation": ranking.recommendation
+
+        })
+
+
+    db.close()
+
+
+    return {
+
+        "job": job.title,
+
+        "top_candidates": result
+
+    }
+
+@app.post("/applications")
+def create_application(
+    candidate_id: int,
+    job_id: int
+):
+
+    db = SessionLocal()
+
+
+    # Check candidate exists
+
+    candidate = (
+        db.query(Candidate)
+        .filter(Candidate.id == candidate_id)
+        .first()
+    )
+
+
+    if not candidate:
+
+        db.close()
+
+        return {
+            "message": "Candidate not found"
+        }
+
+
+
+    # Check job exists
+
+    job = (
+        db.query(Job)
+        .filter(Job.id == job_id)
+        .first()
+    )
+
+
+    if not job:
+
+        db.close()
+
+        return {
+            "message": "Job not found"
+        }
+
+
+
+    # Check duplicate application
+
+    existing = (
+        db.query(Application)
+        .filter(
+            Application.candidate_id == candidate_id,
+            Application.job_id == job_id
+        )
+        .first()
+    )
+
+
+    if existing:
+
+        db.close()
+
+        return {
+            "message": "Candidate already applied",
+            "application_id": existing.id
+        }
+
+
+
+    application = Application(
+        candidate_id=candidate_id,
+        job_id=job_id,
+        status="Applied"
+    )
+
+
+    db.add(application)
+
+    db.commit()
+
+    db.refresh(application)
+
+    db.close()
+
+
+    return {
+
+        "message": "Application created successfully",
+
+        "application_id": application.id,
+
+        "status": application.status
+
+    }
+
+@app.put("/applications/{application_id}")
+def update_application_status(
+    application_id: int,
+    status: str
+):
+
+    db = SessionLocal()
+
+
+    application = (
+        db.query(Application)
+        .filter(
+            Application.id == application_id
+        )
+        .first()
+    )
+
+
+    if not application:
+
+        db.close()
+
+        return {
+            "message": "Application not found"
+        }
+
+
+    application.status = status
+
+
+    db.commit()
+
+    db.refresh(application)
+
+    db.close()
+
+
+    return {
+
+        "message": "Application status updated successfully",
+
+        "application_id": application.id,
+
+        "new_status": application.status
+
+    }
+
+@app.get("/applications")
+def get_applications():
+
+    db = SessionLocal()
+
+    applications = db.query(Application).all()
+
+    result = []
+
+
+    for application in applications:
+
+        candidate = (
+            db.query(Candidate)
+            .filter(
+                Candidate.id == application.candidate_id
+            )
+            .first()
+        )
+
+
+        job = (
+            db.query(Job)
+            .filter(
+                Job.id == application.job_id
+            )
+            .first()
+        )
+
+
+        result.append({
+
+            "application_id": application.id,
+
+            "candidate_name": candidate.name,
+
+            "job_title": job.title,
+
+            "status": application.status
+
+        })
+
+
+    db.close()
+
+
+    return result
+
+@app.get("/jobs/{job_id}/applications")
+def get_job_applications(job_id: int):
+
+    db = SessionLocal()
+
+
+    job = (
+        db.query(Job)
+        .filter(Job.id == job_id)
+        .first()
+    )
+
+
+    if not job:
+
+        db.close()
+
+        return {
+            "message": "Job not found"
+        }
+
+
+    applications = (
+        db.query(Application)
+        .filter(
+            Application.job_id == job_id
+        )
+        .all()
+    )
+
+
+    result = []
+
+
+    for application in applications:
+
+
+        candidate = (
+            db.query(Candidate)
+            .filter(
+                Candidate.id == application.candidate_id
+            )
+            .first()
+        )
+
+
+        result.append({
+
+            "application_id": application.id,
+
+            "candidate_id": candidate.id,
+
+            "candidate_name": candidate.name,
+
+            "email": candidate.email,
+
+            "status": application.status
+
+        })
+
+
+    db.close()
+
+
+    return {
+
+        "job": job.title,
+
+        "applications": result
+
+    }
+
+@app.post("/register")
+def register_recruiter(
+    data: RecruiterRequest
+):
+
+    db = SessionLocal()
+
+
+    existing = (
+        db.query(Recruiter)
+        .filter(
+            Recruiter.email == data.email
+        )
+        .first()
+    )
+
+
+    if existing:
+
+        db.close()
+
+        return {
+            "message": "Recruiter already exists"
+        }
+
+
+    recruiter = Recruiter(
+        name=data.name,
+        email=data.email,
+        password=hash_password(
+            data.password
+        )
+    )
+
+
+    db.add(recruiter)
+
+    db.commit()
+
+    db.refresh(recruiter)
+
+    db.close()
+
+
+    return {
+
+        "message": "Recruiter registered successfully",
+
+        "recruiter_id": recruiter.id
 
     }

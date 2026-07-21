@@ -1,4 +1,4 @@
-from job_service import extract_job_skills
+from backend.services.job_service import extract_job_skills
 
 
 job = """

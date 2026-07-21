@@ -84,3 +84,53 @@ class CandidateRanking(Base):
     recommendation = Column(
         String(100)
     )
+
+class Application(Base):
+
+    __tablename__ = "applications"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    candidate_id = Column(
+        Integer,
+        nullable=False
+    )
+
+    job_id = Column(
+        Integer,
+        nullable=False
+    )
+
+    status = Column(
+        String(50),
+        default="Applied"
+    )
+
+
+
+class Recruiter(Base):
+
+    __tablename__ = "recruiters"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    name = Column(
+        String(100)
+    )
+
+    email = Column(
+        String(100),
+        unique=True
+    )
+
+    password = Column(
+        String(255)
+    )
