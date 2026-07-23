@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query
 from schemas.candidate import CandidateUpdate
 
 from database import SessionLocal
-from models import Candidate
+from models import Application, Candidate, Job, Recruiter
 
 router = APIRouter(
     prefix="/candidates",

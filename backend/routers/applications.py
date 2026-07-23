@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from database import SessionLocal
-from models import Application
+from models import Application, Candidate, Job, Recruiter
 
 router = APIRouter(
     tags=["Applications"]

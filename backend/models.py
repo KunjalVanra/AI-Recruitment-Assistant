@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, Float
 from database import Base
 
-status = Column(String, default="Pending")
+
 class Candidate(Base):
 
     __tablename__ = "candidates"

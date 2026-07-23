@@ -19,5 +19,5 @@ class MatchRequest(BaseModel):
 
 
 class EvaluateRequest(BaseModel):
-    candidate_analysis: dict
-    job_description: str
+    candidate_id: int
+    job_id: int

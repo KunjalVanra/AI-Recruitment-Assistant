@@ -1,12 +1,29 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+import ast
 
 from database import SessionLocal
-from models import Job
+
+from models import (
+    Job,
+    Candidate,
+    CandidateRanking,
+)
+
 from schemas.job import JobRequest
 
 from services.job_service import extract_job_skills
-from fastapi import Depends
+
+from services.scoring_service import (
+    calculate_skill_match,
+    calculate_experience_score,
+    calculate_education_score,
+    calculate_overall_score,
+    calculate_total_experience,
+)
+
 from security import get_current_user
+
+
 
 router = APIRouter(
     prefix="/jobs",
@@ -300,38 +317,22 @@ def top_candidates(job_id: int):
 
     for ranking in rankings:
 
-
         candidate = (
             db.query(Candidate)
             .filter(
-                Candidate.id == ranking.candidate_id
+             Candidate.id == ranking.candidate_id
             )
             .first()
         )
 
+        # Skip if candidate doesn't exist
+        if candidate is None:
+            continue
 
         result.append({
-
             "candidate_id": candidate.id,
-
             "name": candidate.name,
-
             "email": candidate.email,
-
             "score": ranking.overall_score,
-
             "recommendation": ranking.recommendation
-
         })
-
-
-    db.close()
-
-
-    return {
-
-        "job": job.title,
-
-        "top_candidates": result
-
-    }

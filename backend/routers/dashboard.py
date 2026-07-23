@@ -1,5 +1,8 @@
 from fastapi import APIRouter
 
+from database import SessionLocal
+from models import Candidate, Job, Application, CandidateRanking
+
 router = APIRouter(
     tags=["Dashboard"]
 )

@@ -4,7 +4,7 @@ import shutil
 import json
 
 from database import SessionLocal
-from models import Candidate
+from models import Candidate,Job,CandidateRanking
 from services.scoring_service import (
     calculate_skill_match,
     calculate_experience_score,
@@ -105,59 +105,160 @@ async def upload_resume(file: UploadFile = File(...)):
 @router.post("/evaluate_candidate")
 def evaluate_candidate(data: EvaluateRequest):
 
-    candidate = data.candidate_analysis
+    db = SessionLocal()
 
-    job_analysis = extract_job_skills(
-        data.job_description
+    # -------------------------
+    # Fetch Candidate
+    # -------------------------
+    candidate = (
+        db.query(Candidate)
+        .filter(Candidate.id == data.candidate_id)
+        .first()
     )
 
-    required_skills = job_analysis["required_skills"]
+    if not candidate:
+        db.close()
+        return {
+            "message": "Candidate not found"
+        }
 
-    candidate_skills = candidate.get(
-        "Skills",
-        []
+    # -------------------------
+    # Fetch Job
+    # -------------------------
+    job = (
+        db.query(Job)
+        .filter(Job.id == data.job_id)
+        .first()
     )
+
+    if not job:
+        db.close()
+        return {
+            "message": "Job not found"
+        }
+
+    # -------------------------
+    # Required Skills
+    # -------------------------
+    required_skills = [
+        skill.strip()
+        for skill in job.required_skills.split(",")
+    ]
+
+    # -------------------------
+    # Candidate Skills
+    # -------------------------
+    candidate_skills = []
+
+    if candidate.skills:
+        candidate_skills = [
+            skill.strip()
+            for skill in candidate.skills.split(",")
+        ]
 
     skill_result = calculate_skill_match(
         candidate_skills,
         required_skills
     )
 
-    experience_years = candidate.get(
-        "experience_years",
-        0
-    )
+    # -------------------------
+    # Experience
+    # -------------------------
+    experience_years = 0
+
+    if candidate.experience:
+
+        try:
+            experience = ast.literal_eval(candidate.experience)
+
+            experience_years = len(experience)
+
+        except:
+            experience_years = 0
 
     experience_score = calculate_experience_score(
         experience_years
     )
 
-    education = candidate.get(
-        "Education",
-        []
-    )
+    # -------------------------
+    # Education
+    # -------------------------
+    degree = ""
 
-    if education:
-        degree = education[0].get("Degree", "")
-    else:
-        degree = ""
+    if candidate.education:
+
+        try:
+
+            education = ast.literal_eval(
+                candidate.education
+            )
+
+            if education:
+                degree = education[0].get(
+                    "Degree",
+                    ""
+                )
+
+        except:
+            degree = ""
 
     education_score = calculate_education_score(
         degree
     )
 
-    overall_result = calculate_overall_score(
+    # -------------------------
+    # Overall Score
+    # -------------------------
+    overall = calculate_overall_score(
         skill_result["skills_match"],
         experience_score,
         education_score
     )
 
+    # -------------------------
+    # Save Ranking
+    # -------------------------
+    existing = (
+        db.query(CandidateRanking)
+        .filter(
+            CandidateRanking.candidate_id == candidate.id,
+            CandidateRanking.job_id == job.id
+        )
+        .first()
+    )
+
+    if existing:
+
+        existing.overall_score = overall["overall_score"]
+        existing.recommendation = overall["recommendation"]
+
+    else:
+
+        ranking = CandidateRanking(
+            candidate_id=candidate.id,
+            job_id=job.id,
+            overall_score=overall["overall_score"],
+            recommendation=overall["recommendation"]
+        )
+
+        db.add(ranking)
+
+    candidate_name = candidate.name
+    job_title = job.title
+
+    db.commit()
+    db.close()
+
     return {
-        "job_requirements": job_analysis,
-        **skill_result,
+        "candidate": candidate_name,
+        "job": job_title,
+        "matched_skills": skill_result["matched_skills"],
+        "missing_skills": skill_result["missing_skills"],
+        "skills_match": skill_result["skills_match"],
         "experience_score": experience_score,
         "education_score": education_score,
-        **overall_result
+        "overall_score": overall["overall_score"],
+        "recommendation": overall["recommendation"]
     }
 
 @router.post("/match_candidate")
