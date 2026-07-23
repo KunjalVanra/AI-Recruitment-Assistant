@@ -1,24 +1,42 @@
-
-```markdown
 # AI Recruitment Assistant
 
-An AI-powered recruitment system that helps recruiters analyze resumes, match candidates with job requirements, and rank candidates automatically.
+An **AI-powered Recruitment Management System** that automates resume screening, candidate evaluation, skill matching, and candidate ranking using Artificial Intelligence.
 
-## Project Overview
+The system helps recruiters reduce manual screening time by automatically analyzing resumes, extracting candidate information, comparing it with job requirements, and recommending the best candidates.
 
-The AI Recruitment Assistant uses Artificial Intelligence to automate the initial candidate screening process.
+---
 
-The system can:
-- Upload candidate resumes
-- Extract resume information using AI
-- Store candidate details in MySQL
-- Analyze job descriptions
-- Match candidate skills with job requirements
-- Rank candidates based on suitability
+# Project Overview
+
+The AI Recruitment Assistant provides an end-to-end recruitment solution.
+
+### Key Features
+
+- Upload PDF resumes
+- AI-based Resume Parsing
+- Automatic Candidate Information Extraction
+- Candidate Management (CRUD)
+- Job Management
+- Skill Matching
+- Candidate Evaluation
+- Candidate Scoring
+- AI Candidate Ranking
+- Application Management
+- Recruiter Authentication
+- Dashboard Analytics
+- REST API Documentation (Swagger)
+- React Frontend Dashboard
 
 ---
 
 # Tech Stack
+
+## Frontend
+
+- React.js
+- React Router DOM
+- Axios
+- CSS
 
 ## Backend
 
@@ -26,217 +44,428 @@ The system can:
 - FastAPI
 - SQLAlchemy
 - MySQL
+- Pydantic
+- Uvicorn
+
+## AI
+
 - Groq AI API
-
-## AI Features
-
-- Resume analysis
-- Information extraction
-- Skill matching
-- Candidate scoring
-- Candidate ranking
+- Resume Parsing
+- Skill Extraction
+- Candidate Ranking
+- Resume Analysis
 
 ## Tools
 
-- Uvicorn
-- Git & GitHub
+- Git
+- GitHub
+- Swagger UI
+- VS Code
 
 ---
 
-# Backend Structure
+# Project Structure
 
 ```
+AI-Recruitment-Assistant/
 
-backend/
-
-├── app.py
-├── groq_service.py
-├── job_service.py
-├── scoring_service.py
-├── parser.py
-├── database.py
-├── models.py
-├── requirements.txt
-└── uploads/
-
+│
+├── backend/
+│   ├── app.py
+│   ├── database.py
+│   ├── models.py
+│   ├── security.py
+│   ├── requirements.txt
+│   ├── routers/
+│   │      ├── ai.py
+│   │      ├── jobs.py
+│   │      ├── candidates.py
+│   │      ├── applications.py
+│   │      ├── dashboard.py
+│   │      └── auth.py
+│   │
+│   ├── services/
+│   │      ├── parser.py
+│   │      ├── groq_service.py
+│   │      ├── job_service.py
+│   │      └── scoring_service.py
+│   │
+│   └── uploads/
+│
+├── frontend/
+│   ├── src/
+│   │      ├── components/
+│   │      ├── pages/
+│   │      ├── services/
+│   │      └── App.jsx
+│   │
+│   └── package.json
+│
+└── README.md
 ```
 
 ---
 
-# Completed Features
+# Features Implemented
 
-## 1. Resume Upload System ✅
+## 1. AI Resume Upload
 
 - Upload PDF resumes
 - Extract text from PDF
 - Analyze resume using Groq AI
 - Convert AI output into structured JSON
+- Store candidate information in database
 
 ---
 
-## 2. Candidate Database Integration ✅
+## 2. Candidate Management
 
-- Connected MySQL database
-- Added Candidate model
-- Stored:
+Implemented complete CRUD operations.
 
-  - Name
-  - Email
-  - Phone
-  - Skills
-  - Education
-  - Experience
-  - Resume file
+- Add Candidate
+- View Candidates
+- Search Candidates
+- Update Candidate
+- Delete Candidate
 
----
-
-## 3. Duplicate Resume Prevention ✅
-
-- Added email-based duplicate checking
-- Prevents storing the same candidate multiple times
-
----
-
-## 4. Candidate Search System ✅
-
-Supported filters:
+Supported Filters
 
 ```
-
 GET /candidates?skill=Python
 
 GET /candidates?name=KUNJAL
 
 GET /candidates?experience=2
-
 ```
 
 ---
 
-## 5. Candidate Management APIs ✅
+## 3. Duplicate Resume Detection
 
-Implemented:
+- Prevent duplicate candidates
+- Email-based duplicate validation
+
+---
+
+## 4. Job Management
+
+Recruiters can
+
+- Create Jobs
+- View Jobs
+- Store Required Skills
+- Store Experience Requirement
+- Store Education Requirement
+
+---
+
+## 5. AI Candidate Evaluation
+
+The system automatically
+
+- Reads candidate skills
+- Reads job requirements
+- Matches skills
+- Calculates experience score
+- Calculates education score
+- Generates recommendation
+
+Example Output
 
 ```
+Candidate : KUNJAL VANRA
 
+Matched Skills
+
+Python
+SQL
+
+Missing Skills
+
+AWS
+FastAPI
+
+Overall Score
+
+53.5
+
+Recommendation
+
+Average Candidate
+```
+
+---
+
+## 6. Skill Matching
+
+Compare candidate skills with job requirements.
+
+Returns
+
+- Required Skills
+- Matched Skills
+- Missing Skills
+- Skill Match Percentage
+
+---
+
+## 7. Candidate Scoring
+
+Scoring Parameters
+
+| Parameter | Weight |
+|-----------|--------|
+| Skills | 60% |
+| Experience | 25% |
+| Education | 15% |
+
+---
+
+## 8. AI Candidate Ranking
+
+Automatically ranks candidates for every job.
+
+Recommendation Levels
+
+- Strong Candidate
+- Good Candidate
+- Average Candidate
+- Not Recommended
+
+---
+
+## 9. Application Management
+
+Recruiters can
+
+- Apply Candidate to Job
+- View Applications
+- Update Application Status
+- View Job Applications
+
+---
+
+## 10. Recruiter Authentication
+
+Implemented
+
+- Register
+- Login
+- JWT Authentication
+- Protected APIs
+
+---
+
+## 11. Dashboard
+
+Dashboard displays
+
+- Total Candidates
+- Total Jobs
+- Strong Candidates
+- Good Candidates
+- Average Candidates
+
+---
+
+## 12. React Frontend
+
+Developed a responsive frontend with
+
+- Dashboard
+- Candidates Page
+- Jobs Page
+- Applications Page
+- Rankings Page
+- Navigation Bar
+
+---
+
+# REST API Endpoints
+
+## Authentication
+
+```
+POST /auth/register
+
+POST /auth/login
+```
+
+---
+
+## AI Services
+
+```
+POST /ai/upload_resume
+
+POST /ai/evaluate_candidate
+
+POST /ai/match_candidate
+
+POST /ai/score_candidate
+
+POST /ai/rank_candidate
+
+GET /ai/rankings
+```
+
+---
+
+## Jobs
+
+```
+POST /jobs
+
+GET /jobs
+
+GET /jobs/{id}/rankings
+
+GET /jobs/{id}/top_candidates
+```
+
+---
+
+## Candidates
+
+```
 GET /candidates
 
-```
-View all candidates
+GET /candidates/{id}
 
+PUT /candidates/{id}
 
-```
-
-GET /candidate/{id}
-
-```
-View candidate details
-
-
-```
-
-PUT /candidate/{id}
-
-```
-Update candidate information
-
-
-```
-
-DELETE /candidate/{id}
-
-```
-Delete candidate
-
----
-
-## 6. Candidate Ranking System ✅
-
-Implemented automatic candidate scoring using:
-
-- Skills score (60%)
-- Experience score (25%)
-- Education score (15%)
-
-Ranking output includes:
-
-- Overall score
-- Candidate recommendation
-
-Example:
-
-```
-
-Strong Candidate
-Good Candidate
-Average Candidate
-Not Recommended
-
+DELETE /candidates/{id}
 ```
 
 ---
 
-# How to Run Backend
-
-Go to backend folder:
+## Applications
 
 ```
+POST /applications
 
+GET /applications
+
+PUT /applications/{id}
+
+GET /jobs/{job_id}/applications
+```
+
+---
+
+## Dashboard
+
+```
+GET /dashboard/stats
+```
+
+---
+
+# Installation
+
+## Clone Repository
+
+```bash
+git clone https://github.com/yourusername/AI-Recruitment-Assistant.git
+```
+
+---
+
+## Backend
+
+```bash
 cd backend
 
-```
+python -m venv venv
 
-Install dependencies:
-
-```
+venv\Scripts\activate
 
 pip install -r requirements.txt
 
-```
-
-Start server:
-
-```
-
 uvicorn app:app --reload
-
 ```
 
-API Documentation:
+Backend runs at
 
 ```
+http://127.0.0.1:8000
+```
 
-[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+Swagger Documentation
 
+```
+http://127.0.0.1:8000/docs
 ```
 
 ---
 
-# Current Progress
+## Frontend
 
-Backend Completion:
+```bash
+cd frontend
 
-✅ FastAPI Setup  
-✅ Groq AI Integration  
-✅ Resume Parser  
-✅ Resume Upload  
-✅ MySQL Database  
-✅ Candidate CRUD APIs  
-✅ Candidate Search  
-✅ Candidate Ranking  
+npm install
+
+npm run dev
+```
+
+Frontend runs at
+
+```
+http://localhost:5173
+```
 
 ---
 
-# Upcoming Features
 
-- Job Management System
-- Store Job Descriptions
-- Job-based Candidate Ranking
-- Recruiter Dashboard
-- Authentication System
+# Future Enhancements
+
+- Email Notifications
+- Interview Scheduling
+- Resume Recommendation Engine
+- AI Chatbot for Recruiters
+- Resume PDF Reports
+- Cloud Deployment
+- Multi-language Resume Parsing
+- Advanced Analytics Dashboard
+
+---
+
+# Project Status
+
+## Completed
+
+- FastAPI Backend
 - React Frontend
-- Deployment
-```
+- AI Resume Parser
+- Groq AI Integration
+- Candidate CRUD
+- Job CRUD
+- Resume Upload
+- Candidate Evaluation
+- Skill Matching
+- Candidate Ranking
+- Application Management
+- Recruiter Authentication
+- Dashboard Analytics
+- Swagger API Documentation
+
+**Project Status:** ✅ Completed
 
 ---
 
+# Developed By
+
+**Kunjal Vanra**
+
+Final Year Student
+
+Computer Science & Engineering
+
+Academic Project – 2026
+
+---
+
+# License
+
+This project is developed for educational and academic purposes.
