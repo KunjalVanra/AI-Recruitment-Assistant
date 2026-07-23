@@ -1,6 +1,5 @@
 import json
-from groq_service import client
-
+from services.groq_service import client
 
 def extract_job_skills(job_description):
 

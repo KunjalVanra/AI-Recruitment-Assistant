@@ -1,4 +1,4 @@
-from scoring_service import (
+from backend.services.scoring_service import (
     calculate_experience_score,
     calculate_education_score,
     calculate_overall_score
