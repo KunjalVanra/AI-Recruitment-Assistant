@@ -159,7 +159,6 @@ def get_applications():
 
     result = []
 
-
     for application in applications:
 
         candidate = (
@@ -169,7 +168,6 @@ def get_applications():
             )
             .first()
         )
-
 
         job = (
             db.query(Job)
@@ -179,12 +177,21 @@ def get_applications():
             .first()
         )
 
+        # Skip invalid application records
+        if candidate is None or job is None:
+            continue
 
         result.append({
 
             "application_id": application.id,
 
+            "candidate_id": candidate.id,
+
             "candidate_name": candidate.name,
+
+            "candidate_email": candidate.email,
+
+            "job_id": job.id,
 
             "job_title": job.title,
 
@@ -192,9 +199,7 @@ def get_applications():
 
         })
 
-
     db.close()
-
 
     return result
 
@@ -203,22 +208,18 @@ def get_job_applications(job_id: int):
 
     db = SessionLocal()
 
-
     job = (
         db.query(Job)
         .filter(Job.id == job_id)
         .first()
     )
 
-
     if not job:
-
         db.close()
 
         return {
             "message": "Job not found"
         }
-
 
     applications = (
         db.query(Application)
@@ -228,12 +229,9 @@ def get_job_applications(job_id: int):
         .all()
     )
 
-
     result = []
 
-
     for application in applications:
-
 
         candidate = (
             db.query(Candidate)
@@ -243,6 +241,9 @@ def get_job_applications(job_id: int):
             .first()
         )
 
+        # Skip if candidate doesn't exist
+        if candidate is None:
+            continue
 
         result.append({
 
@@ -258,14 +259,9 @@ def get_job_applications(job_id: int):
 
         })
 
-
     db.close()
 
-
     return {
-
         "job": job.title,
-
         "applications": result
-
     }

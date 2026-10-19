@@ -4,3 +4,7 @@ __pycache__/
 uploads/
 node_modules/
 *.pyc
+.env.*
+!.env.example
+.venv/
+*.sql

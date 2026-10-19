@@ -8,13 +8,53 @@ function Dashboard() {
     strong_candidates: 0,
     good_candidates: 0,
     average_candidates: 0,
+    not_recommended_candidates: 0,
   });
 
   useEffect(() => {
-    api
-      .get("/dashboard/stats")
-      .then((res) => setStats(res.data))
-      .catch(console.error);
+    const loadDashboard = async () => {
+      try {
+        // Get the SAME ranking data used by Rankings.jsx
+        const rankingsResponse = await api.get("/ai/rankings");
+
+        const rankings = rankingsResponse.data;
+
+        let strong = 0;
+        let good = 0;
+        let average = 0;
+        let notRecommended = 0;
+
+        rankings.forEach((candidate) => {
+          const score = Number(candidate.overall_score);
+
+          if (score >= 85) {
+            strong++;
+          } else if (score >= 70) {
+            good++;
+          } else if (score >= 50) {
+            average++;
+          } else {
+            notRecommended++;
+          }
+        });
+
+        // Get total jobs
+        const jobsResponse = await api.get("/jobs/");
+
+        setStats({
+          total_candidates: rankings.length,
+          total_jobs: jobsResponse.data.length,
+          strong_candidates: strong,
+          good_candidates: good,
+          average_candidates: average,
+          not_recommended_candidates: notRecommended,
+        });
+      } catch (error) {
+        console.error("Dashboard error:", error);
+      }
+    };
+
+    loadDashboard();
   }, []);
 
   return (
@@ -62,6 +102,13 @@ function Dashboard() {
           value={stats.average_candidates}
           color="#E74C3C"
           icon="📄"
+        />
+
+        <Card
+          title="Not Recommended"
+          value={stats.not_recommended_candidates}
+          color="#C0392B"
+          icon="❌"
         />
       </div>
 

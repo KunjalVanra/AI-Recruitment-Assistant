@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 import ast
 
 from database import SessionLocal
@@ -21,9 +21,6 @@ from services.scoring_service import (
     calculate_total_experience,
 )
 
-from security import get_current_user
-
-
 
 router = APIRouter(
     prefix="/jobs",
@@ -31,308 +28,358 @@ router = APIRouter(
 )
 
 
+# ============================================================
+# CREATE JOB
+# ============================================================
+
 @router.post("/")
-def create_job(
-    data: JobRequest,
-    user=Depends(get_current_user)
-):
+def create_job(data: JobRequest):
 
     db = SessionLocal()
 
-    job_analysis = extract_job_skills(
-        data.description
-    )
-
-    job = Job(
-        title=data.title,
-        description=data.description,
-        required_skills=", ".join(
-            job_analysis["required_skills"]
-        ),
-        experience_requirement=job_analysis.get(
-            "experience_requirement",
-            "Not specified"
-        ),
-        education_requirement=job_analysis.get(
-            "education_requirement",
-            "Not specified"
+    try:
+        # Extract job requirements using AI
+        job_analysis = extract_job_skills(
+            data.description
         )
-    )
 
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-    db.close()
+        job = Job(
+            title=data.title,
+            description=data.description,
+            required_skills=", ".join(
+                job_analysis.get("required_skills", [])
+            ),
+            experience_requirement=job_analysis.get(
+                "experience_requirement",
+                "Not specified"
+            ),
+            education_requirement=job_analysis.get(
+                "education_requirement",
+                "Not specified"
+            )
+        )
 
-    return {
-        "message": "Job created successfully",
-        "job_id": job.id,
-        "job_details": {
-            "title": job.title,
-            "required_skills": job.required_skills
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        return {
+            "message": "Job created successfully",
+            "job_id": job.id,
+            "job_details": {
+                "title": job.title,
+                "required_skills": job.required_skills
+            }
         }
-    }
 
+    finally:
+        db.close()
+
+
+# ============================================================
+# GET ALL JOBS
+# ============================================================
 
 @router.get("/")
 def get_jobs():
 
     db = SessionLocal()
 
-    jobs = db.query(Job).all()
+    try:
+        jobs = db.query(Job).all()
 
-    result = []
+        result = []
 
-    for job in jobs:
-        result.append({
-            "id": job.id,
-            "title": job.title,
-            "description": job.description,
-            "required_skills": job.required_skills,
-            "experience_requirement": job.experience_requirement,
-            "education_requirement": job.education_requirement
-        })
+        for job in jobs:
 
-    db.close()
+            result.append({
+                "id": job.id,
+                "title": job.title,
+                "description": job.description,
+                "required_skills": job.required_skills,
+                "experience_requirement": job.experience_requirement,
+                "education_requirement": job.education_requirement
+            })
 
-    return result
+        return result
+
+    finally:
+        db.close()
+
+
+# ============================================================
+# GET CANDIDATE RANKINGS FOR A JOB
+# ============================================================
 
 @router.get("/{job_id}/rankings")
 def job_candidate_rankings(job_id: int):
 
     db = SessionLocal()
 
-    # Get selected job
-    job = (
-        db.query(Job)
-        .filter(Job.id == job_id)
-        .first()
-    )
+    try:
 
-    if not job:
-        db.close()
-        return {
-            "message": "Job not found"
-        }
+        # Get selected job
+        job = (
+            db.query(Job)
+            .filter(Job.id == job_id)
+            .first()
+        )
 
+        if not job:
+            return {
+                "message": "Job not found"
+            }
 
-    # Convert job skills string to list
-    required_skills = [
-        skill.strip()
-        for skill in job.required_skills.split(",")
-    ]
-
-
-    candidates = db.query(Candidate).all()
-
-    rankings = []
-
-
-    for candidate in candidates:
-
-
-        candidate_skills = [
+        # Convert required skills string into list
+        required_skills = [
             skill.strip()
-            for skill in candidate.skills.split(",")
+            for skill in job.required_skills.split(",")
+            if skill.strip()
         ]
 
+        # Get all candidates
+        candidates = db.query(Candidate).all()
 
-        # Skill matching
-        skill_result = calculate_skill_match(
-            candidate_skills,
-            required_skills
-        )
+        rankings = []
 
+        for candidate in candidates:
 
-        
-        # Calculate real experience
+            # ------------------------------------------------
+            # Candidate skills
+            # ------------------------------------------------
 
+            candidate_skills = []
 
+            if candidate.skills:
 
-        experience_data = []
+                candidate_skills = [
+                    skill.strip()
+                    for skill in candidate.skills.split(",")
+                    if skill.strip()
+                ]
 
-        if candidate.experience:
+            # ------------------------------------------------
+            # Skill matching
+            # ------------------------------------------------
 
-            try:
-                experience_data = ast.literal_eval(
-                    candidate.experience
+            skill_result = calculate_skill_match(
+                candidate_skills,
+                required_skills
+            )
+
+            # ------------------------------------------------
+            # Experience
+            # ------------------------------------------------
+
+            experience_data = []
+
+            if candidate.experience:
+
+                try:
+                    experience_data = ast.literal_eval(
+                        candidate.experience
+                    )
+
+                except (ValueError, SyntaxError):
+                    experience_data = []
+
+            total_experience = calculate_total_experience(
+                experience_data
+            )
+
+            experience_score = calculate_experience_score(
+                total_experience
+            )
+
+            # ------------------------------------------------
+            # Education
+            # ------------------------------------------------
+
+            education_data = []
+
+            if candidate.education:
+
+                try:
+                    education_data = ast.literal_eval(
+                        candidate.education
+                    )
+
+                except (ValueError, SyntaxError):
+                    education_data = []
+
+            degree = ""
+
+            if education_data:
+
+                degree = education_data[0].get(
+                    "Degree",
+                    ""
                 )
 
-            except:
-                experience_data = []
+                # Support lowercase "degree" too
+                if not degree:
+                    degree = education_data[0].get(
+                        "degree",
+                        ""
+                    )
 
+            education_score = calculate_education_score(
+                degree
+            )
 
-        total_experience = calculate_total_experience(
-            experience_data
-        )
+            # ------------------------------------------------
+            # Overall score
+            # ------------------------------------------------
 
+            overall = calculate_overall_score(
+                skill_result["skills_match"],
+                experience_score,
+                education_score
+            )
 
-        experience_score = calculate_experience_score(
-            total_experience
-        )
+            # ------------------------------------------------
+            # Save/update ranking
+            # ------------------------------------------------
 
+            existing_ranking = (
+                db.query(CandidateRanking)
+                .filter(
+                    CandidateRanking.candidate_id == candidate.id,
+                    CandidateRanking.job_id == job.id
+                )
+                .first()
+            )
 
-        # Education score
-        education_data = []
+            if existing_ranking:
 
-        if candidate.education:
-
-            try:
-                education_data = ast.literal_eval(
-                    candidate.education
+                existing_ranking.overall_score = (
+                    overall["overall_score"]
                 )
 
-            except:
-                education_data = []
+                existing_ranking.recommendation = (
+                    overall["recommendation"]
+                )
 
+            else:
 
-        degree = ""
+                ranking_record = CandidateRanking(
+                    candidate_id=candidate.id,
+                    job_id=job.id,
+                    overall_score=overall["overall_score"],
+                    recommendation=overall["recommendation"]
+                )
 
+                db.add(ranking_record)
 
-        if education_data:
+            db.commit()
 
-            degree = education_data[0].get(
-                "Degree",
-                ""
-            )
+            # ------------------------------------------------
+            # Add ranking to result
+            # ------------------------------------------------
 
+            rankings.append({
 
-        education_score = calculate_education_score(
-            degree
+                "candidate_id": candidate.id,
+
+                "name": candidate.name,
+
+                "skills_match":
+                    skill_result["skills_match"],
+
+                "overall_score":
+                    overall["overall_score"],
+
+                "recommendation":
+                    overall["recommendation"]
+            })
+
+        # Sort highest score first
+        rankings.sort(
+            key=lambda x: x["overall_score"],
+            reverse=True
         )
-        
+
+        return {
+            "job": job.title,
+            "rankings": rankings
+        }
+
+    finally:
+        db.close()
 
 
-        # Overall score
-        overall = calculate_overall_score(
-            skill_result["skills_match"],
-            experience_score,
-            education_score
-        )
-
-        existing_ranking = db.query(
-            CandidateRanking
-        ).filter(
-            CandidateRanking.candidate_id == candidate.id,
-            CandidateRanking.job_id == job.id
-        ).first()
-
-
-        if existing_ranking:
-
-            existing_ranking.overall_score = (
-                overall["overall_score"]
-            )
-
-            existing_ranking.recommendation = (
-                overall["recommendation"]
-            )
-
-
-        else:
-            ranking_record = CandidateRanking(
-                candidate_id=candidate.id,
-                job_id=job.id,
-                overall_score=overall["overall_score"],
-                recommendation=overall["recommendation"]
-            )
-
-            db.add(ranking_record)
-
-
-        db.commit()
-         
-
-        rankings.append({
-
-            "candidate_id": candidate.id,
-
-            "name": candidate.name,
-
-            "skills_match":
-            skill_result["skills_match"],
-
-            "overall_score":
-            overall["overall_score"],
-
-            "recommendation":
-            overall["recommendation"]
-
-        })
-
-    job_title = job.title
-    db.close()
-
-
-    rankings.sort(
-        key=lambda x: x["overall_score"],
-        reverse=True
-    )
-
-
-    return {
-        "job": job_title,
-        "rankings": rankings
-    }
-
+# ============================================================
+# GET TOP 5 CANDIDATES
+# ============================================================
 
 @router.get("/{job_id}/top_candidates")
 def top_candidates(job_id: int):
 
     db = SessionLocal()
 
+    try:
 
-    job = (
-        db.query(Job)
-        .filter(Job.id == job_id)
-        .first()
-    )
-
-
-    if not job:
-
-        db.close()
-
-        return {
-            "message": "Job not found"
-        }
-
-
-
-    rankings = (
-        db.query(CandidateRanking)
-        .filter(
-            CandidateRanking.job_id == job_id
-        )
-        .order_by(
-            CandidateRanking.overall_score.desc()
-        )
-        .limit(5)
-        .all()
-    )
-
-
-    result = []
-
-
-    for ranking in rankings:
-
-        candidate = (
-            db.query(Candidate)
-            .filter(
-             Candidate.id == ranking.candidate_id
-            )
+        # Get job
+        job = (
+            db.query(Job)
+            .filter(Job.id == job_id)
             .first()
         )
 
-        # Skip if candidate doesn't exist
-        if candidate is None:
-            continue
+        if not job:
 
-        result.append({
-            "candidate_id": candidate.id,
-            "name": candidate.name,
-            "email": candidate.email,
-            "score": ranking.overall_score,
-            "recommendation": ranking.recommendation
-        })
+            return {
+                "message": "Job not found"
+            }
+
+        # Get top 5 rankings
+        rankings = (
+            db.query(CandidateRanking)
+            .filter(
+                CandidateRanking.job_id == job_id
+            )
+            .order_by(
+                CandidateRanking.overall_score.desc()
+            )
+            .limit(5)
+            .all()
+        )
+
+        result = []
+
+        for ranking in rankings:
+
+            candidate = (
+                db.query(Candidate)
+                .filter(
+                    Candidate.id == ranking.candidate_id
+                )
+                .first()
+            )
+
+            # Skip if candidate doesn't exist
+            if candidate is None:
+                continue
+
+            result.append({
+
+                "candidate_id":
+                    candidate.id,
+
+                "name":
+                    candidate.name,
+
+                "email":
+                    candidate.email,
+
+                "score":
+                    ranking.overall_score,
+
+                "recommendation":
+                    ranking.recommendation
+            })
+
+        return result
+
+    finally:
+        db.close()

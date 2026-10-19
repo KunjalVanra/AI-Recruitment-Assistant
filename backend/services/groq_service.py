@@ -21,51 +21,53 @@ def analyze_resume(resume_text):
     prompt = f"""
 You are an AI recruitment assistant.
 
-Analyze the following resume and return ONLY valid JSON.
+Analyze the following resume.
 
-Extract:
+Return ONLY a valid JSON object.
+Do NOT use markdown.
+Do NOT use ```json.
+Do NOT add explanations before or after the JSON.
 
-- Name
-- Email
-- Phone
-- Skills
-- Education
-- Experience
-- Experience years
-- Projects
-- Certifications
+Use EXACTLY these keys:
 
-Experience years should be a number.
+{{
+    "Name": "",
+    "Email": "",
+    "Phone": "",
+    "Skills": [],
+    "Education": [],
+    "Experience": [],
+    "Experience years": 0,
+    "Projects": [],
+    "Certifications": []
+}}
 
-Examples:
-
-No experience:
-0
-
-6 month internship:
-0.5
-
-1 year job:
-1
-
-3 year job:
-3
+Rules:
+- Name, Email and Phone must be strings.
+- Skills must be an array of strings.
+- Education must be an array of objects.
+- Experience must be an array of objects.
+- Experience years must be a number.
+- Projects must be an array of strings.
+- Certifications must be an array of strings.
+- If information is not available, use an empty string, empty array, or 0.
+- Make sure the JSON is COMPLETE and ends with }}.
+- Do not include any text outside the JSON.
 
 Resume:
 {resume_text}
 """
 
-
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-20b",
         messages=[
             {
                 "role": "user",
                 "content": prompt
             }
         ],
-        temperature=0.2,
+        temperature=0.1,
+        max_tokens=4000,
     )
-
 
     return response.choices[0].message.content
