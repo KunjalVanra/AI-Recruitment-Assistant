@@ -44,7 +44,7 @@ app = FastAPI(
 )
 
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://ai-recruitment-assistant-1olz9txt6-kiwi-62d1.vercel.app")
 
 app.add_middleware(
     CORSMiddleware,
