@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000",
+  baseURL: "https://ai-recruitment-assistant-3bir.onrender.com",
 });
 
 // Automatically send JWT token with every request
