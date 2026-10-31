@@ -36,13 +36,24 @@ function Login() {
       // Reload so App.jsx reads the updated login state
       window.location.href = "/dashboard";
 
-    } catch (err) {
-      console.error(err);
+        } catch (err) {
+      console.error("Login Error:", err.response?.data || err);
 
-      alert(
-        err.response?.data?.message ||
-        "Invalid email or password."
-      );
+      const errorData = err.response?.data;
+
+      let errorMessage = "Invalid email or password.";
+
+      if (typeof errorData?.detail === "string") {
+        errorMessage = errorData.detail;
+      } else if (Array.isArray(errorData?.detail)) {
+        errorMessage = errorData.detail
+          .map((item) => item.msg || "Invalid input")
+          .join(", ");
+      } else if (typeof errorData?.message === "string") {
+        errorMessage = errorData.message;
+      }
+
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
