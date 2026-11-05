@@ -1,8 +1,11 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class CandidateUpdate(BaseModel):
-    phone: str | None = None
-    skills: str | None = None
-    education: str | None = None
-    experience: str | None = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    skills: Optional[str] = None
+    education: Optional[str] = None
+    experience: Optional[str] = None

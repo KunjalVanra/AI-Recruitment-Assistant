@@ -1,24 +1,27 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react";
 import api from "../services/api";
+import { useToast } from "../context/ToastContext";
 
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
 
     if (!email.trim() || !password.trim()) {
-      alert("Please enter both email and password.");
+      showToast("Please enter both email and password.", "warning");
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!emailRegex.test(email)) {
-      alert("Please enter a valid email address.");
+    if (!emailRegex.test(email.trim())) {
+      showToast("Please enter a valid email address.", "warning");
       return;
     }
 
@@ -26,21 +29,20 @@ function Login() {
       setLoading(true);
 
       const res = await api.post("/auth/login", {
-        email,
+        email: email.trim(),
         password,
       });
 
       localStorage.setItem("loggedIn", "true");
       localStorage.setItem("user", JSON.stringify(res.data));
+      showToast("Login successful! Welcome back.", "success");
 
-      // Reload so App.jsx reads the updated login state
+      // Redirect to dashboard
       window.location.href = "/dashboard";
-
-        } catch (err) {
+    } catch (err) {
       console.error("Login Error:", err.response?.data || err);
 
       const errorData = err.response?.data;
-
       let errorMessage = "Invalid email or password.";
 
       if (typeof errorData?.detail === "string") {
@@ -53,248 +55,243 @@ function Login() {
         errorMessage = errorData.message;
       }
 
-      alert(errorMessage);
+      showToast(errorMessage, "error");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={page}>
-
-      {/* Header */}
-      <div style={header}>
-        <div style={logoBox}>🤖</div>
-
-        <div>
-          <h1 style={title}>AI Recruitment Assistant</h1>
-          <p style={headerSubtitle}>
-            AI Powered Resume Screening & Candidate Ranking System
-          </p>
+    <div style={containerStyle}>
+      {/* Top Brand Bar */}
+      <header style={headerStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={logoIcon}>
+            <Sparkles size={18} color="#ffffff" />
+          </div>
+          <div>
+            <div style={brandName}>AI Recruitment Assistant</div>
+            <div style={brandTagline}>Intelligent Candidate Screening & Matching</div>
+          </div>
         </div>
-      </div>
+        <div style={statusBadge}>
+          <span style={greenPulse} />
+          <span>Production API Online</span>
+        </div>
+      </header>
 
-      {/* Login Card */}
-      <div style={content}>
-
-        <form onSubmit={handleLogin} style={card}>
-
-          <div style={iconCircle}>
-            👤
+      {/* Main Content Card */}
+      <main style={mainContentStyle}>
+        <div style={authCardStyle}>
+          <div style={{ textAlign: "center", marginBottom: "28px" }}>
+            <div style={iconBadgeStyle}>
+              <ShieldCheck size={26} color="#2563eb" />
+            </div>
+            <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
+              Recruiter Sign In
+            </h1>
+            <p style={{ fontSize: "14px", color: "#64748b" }}>
+              Sign in to manage openings, screen resumes, and review AI rankings
+            </p>
           </div>
 
-          <h2 style={heading}>Welcome Back</h2>
+          <form onSubmit={handleLogin}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="login-email">
+                Work Email <span className="required">*</span>
+              </label>
+              <div style={inputContainer}>
+                <Mail size={16} color="#94a3b8" style={inputIcon} />
+                <input
+                  id="login-email"
+                  type="email"
+                  className="form-control"
+                  style={{ paddingLeft: "38px" }}
+                  placeholder="recruiter@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+            </div>
 
-          <p style={description}>
-            Sign in to access your recruitment dashboard
-          </p>
+            <div className="form-group" style={{ marginBottom: "24px" }}>
+              <label className="form-label" htmlFor="login-password">
+                Password <span className="required">*</span>
+              </label>
+              <div style={inputContainer}>
+                <Lock size={16} color="#94a3b8" style={inputIcon} />
+                <input
+                  id="login-password"
+                  type="password"
+                  className="form-control"
+                  style={{ paddingLeft: "38px" }}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+            </div>
 
-          {/* Email */}
-          <label style={label}>
-            Email Address
-          </label>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: "100%", padding: "12px", fontSize: "15px" }}
+              disabled={loading}
+            >
+              {loading ? (
+                <span>Authenticating...</span>
+              ) : (
+                <>
+                  <span>Sign In to Dashboard</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </form>
 
-          <input
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={input}
-          />
+          <div style={dividerStyle}>
+            <span>New to the platform?</span>
+          </div>
 
-          {/* Password */}
-          <label style={label}>
-            Password
-          </label>
-
-          <input
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={input}
-          />
-
-          {/* Login */}
-          <button
-            type="submit"
-            style={button}
-            disabled={loading}
+          <Link
+            to="/register"
+            className="btn btn-secondary"
+            style={{ width: "100%", padding: "11px", textAlign: "center" }}
           >
-            {loading ? "Logging in..." : "Login"}
-          </button>
-
-          <div style={divider}>
-            <span>Don't have an account?</span>
-          </div>
-
-          <Link to="/register" style={registerButton}>
-            Create New Account
+            Create Recruiter Account
           </Link>
 
-        </form>
-
-      </div>
-
-      {/* Footer */}
-      <div style={footer}>
-        AI Recruitment Assistant • Intelligent Hiring System
-      </div>
-
+          <div style={securityFooter}>
+            <ShieldCheck size={14} color="#10b981" />
+            <span>Secure 256-bit JWT encrypted session</span>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
 
-
-/* ========================= */
-/* Styles */
-/* ========================= */
-
-const page = {
+const containerStyle = {
   minHeight: "100vh",
-  background: "#f5f7fb",
-  fontFamily: "Arial, sans-serif",
+  background: "linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%)",
+  display: "flex",
+  flexDirection: "column",
 };
 
-const header = {
-  height: "85px",
-  background: "#1976d2",
+const headerStyle = {
+  height: "72px",
+  padding: "0 36px",
   display: "flex",
   alignItems: "center",
-  padding: "0 45px",
-  color: "white",
-  boxSizing: "border-box",
-};
-
-const logoBox = {
-  width: "50px",
-  height: "50px",
-  borderRadius: "10px",
-  background: "rgba(255,255,255,0.18)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "25px",
-  marginRight: "15px",
-};
-
-const title = {
-  margin: 0,
-  fontSize: "24px",
-};
-
-const headerSubtitle = {
-  margin: "5px 0 0",
-  fontSize: "13px",
-  opacity: 0.9,
-};
-
-const content = {
-  minHeight: "calc(100vh - 145px)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  padding: "40px 20px",
-  boxSizing: "border-box",
-};
-
-const card = {
-  width: "390px",
+  justifyContent: "space-between",
+  borderBottom: "1px solid #e2e8f0",
   background: "#ffffff",
-  padding: "40px",
-  borderRadius: "12px",
-  boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
-  boxSizing: "border-box",
 };
 
-const iconCircle = {
-  width: "65px",
-  height: "65px",
-  borderRadius: "50%",
-  background: "#e3f2fd",
-  color: "#1976d2",
+const logoIcon = {
+  width: "34px",
+  height: "34px",
+  borderRadius: "9px",
+  background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "28px",
-  margin: "0 auto 20px",
+  boxShadow: "0 2px 6px rgba(37, 99, 235, 0.3)",
 };
 
-const heading = {
-  textAlign: "center",
-  margin: "0 0 8px",
-  color: "#222",
-  fontSize: "26px",
+const brandName = {
+  fontSize: "16px",
+  fontWeight: 800,
+  color: "#0f172a",
 };
 
-const description = {
-  textAlign: "center",
-  color: "#777",
-  fontSize: "14px",
-  marginBottom: "30px",
-};
-
-const label = {
-  display: "block",
-  fontWeight: "600",
-  fontSize: "14px",
-  color: "#333",
-  marginBottom: "7px",
-  marginTop: "18px",
-};
-
-const input = {
-  width: "100%",
-  padding: "13px",
-  border: "1px solid #d5d5d5",
-  borderRadius: "7px",
-  fontSize: "14px",
-  boxSizing: "border-box",
-  outline: "none",
-};
-
-const button = {
-  width: "100%",
-  padding: "13px",
-  marginTop: "25px",
-  background: "#1976d2",
-  color: "white",
-  border: "none",
-  borderRadius: "7px",
-  fontSize: "15px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const divider = {
-  textAlign: "center",
-  margin: "25px 0 15px",
-  color: "#777",
-  fontSize: "13px",
-};
-
-const registerButton = {
-  display: "block",
-  width: "100%",
-  padding: "12px",
-  textAlign: "center",
-  border: "1px solid #1976d2",
-  borderRadius: "7px",
-  color: "#1976d2",
-  textDecoration: "none",
-  fontWeight: "bold",
-  fontSize: "14px",
-  boxSizing: "border-box",
-};
-
-const footer = {
-  height: "60px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "#888",
+const brandTagline = {
   fontSize: "12px",
+  color: "#64748b",
+};
+
+const statusBadge = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  fontSize: "12.5px",
+  color: "#059669",
+  fontWeight: 600,
+  background: "#ecfdf5",
+  padding: "5px 12px",
+  borderRadius: "20px",
+  border: "1px solid #a7f3d0",
+};
+
+const greenPulse = {
+  width: "7px",
+  height: "7px",
+  borderRadius: "50%",
+  background: "#10b981",
+};
+
+const mainContentStyle = {
+  flex: 1,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "36px 20px",
+};
+
+const authCardStyle = {
+  width: "100%",
+  maxWidth: "420px",
   background: "#ffffff",
+  borderRadius: "16px",
+  padding: "36px 32px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)",
+};
+
+const iconBadgeStyle = {
+  width: "52px",
+  height: "52px",
+  borderRadius: "50%",
+  background: "#eff6ff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  margin: "0 auto 16px",
+  border: "1px solid #dbeafe",
+};
+
+const inputContainer = {
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+};
+
+const inputIcon = {
+  position: "absolute",
+  left: "12px",
+  pointerEvents: "none",
+};
+
+const dividerStyle = {
+  textAlign: "center",
+  margin: "24px 0 16px",
+  fontSize: "13px",
+  color: "#94a3b8",
+  position: "relative",
+};
+
+const securityFooter = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
+  marginTop: "24px",
+  fontSize: "12px",
+  color: "#64748b",
 };
 
 export default Login;

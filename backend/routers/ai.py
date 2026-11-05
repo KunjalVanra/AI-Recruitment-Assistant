@@ -6,7 +6,7 @@ import json
 import ast
 
 from database import SessionLocal
-from models import Candidate, Job, CandidateRanking
+from models import Candidate, Job, CandidateRanking, Application
 
 from services.scoring_service import (
     calculate_skill_match,
@@ -17,11 +17,12 @@ from services.scoring_service import (
 
 from services.job_service import extract_job_skills
 from services.parser import extract_text_from_pdf
-from services.groq_service import analyze_resume
+from services.groq_service import analyze_resume, chat_with_groq
 
 from schemas.ai import (
     CandidateJobRequest,
     EvaluateRequest,
+    ChatRequest,
 )
 
 
@@ -926,3 +927,127 @@ def get_rankings():
     finally:
 
         db.close()
+
+
+# =========================================================
+# RECRUITER AI CHATBOT ASSISTANT
+# =========================================================
+
+@router.post("/chat")
+def chat_assistant(data: ChatRequest):
+    db = SessionLocal()
+    try:
+        # Retrieve live database context
+        jobs = db.query(Job).all()
+        candidates = db.query(Candidate).all()
+        applications = db.query(Application).all()
+
+        jobs_context = []
+        for j in jobs:
+            jobs_context.append({
+                "job_id": j.id,
+                "title": j.title,
+                "required_skills": j.required_skills,
+                "experience_requirement": j.experience_requirement,
+                "education_requirement": j.education_requirement,
+                "description_excerpt": (j.description[:250] + "...") if j.description and len(j.description) > 250 else j.description
+            })
+
+        candidates_context = []
+        for c in candidates:
+            candidates_context.append({
+                "candidate_id": c.id,
+                "name": c.name,
+                "email": c.email,
+                "skills": c.skills
+            })
+
+        # Selected job context if provided
+        selected_job_info = None
+        if data.job_id:
+            target_job = db.query(Job).filter(Job.id == data.job_id).first()
+            if target_job:
+                selected_job_info = {
+                    "id": target_job.id,
+                    "title": target_job.title,
+                    "description": target_job.description,
+                    "required_skills": target_job.required_skills,
+                    "experience_requirement": target_job.experience_requirement,
+                    "education_requirement": target_job.education_requirement
+                }
+
+        # Selected candidate context if provided
+        selected_candidate_info = None
+        if data.candidate_id:
+            target_cand = db.query(Candidate).filter(Candidate.id == data.candidate_id).first()
+            if target_cand:
+                selected_candidate_info = {
+                    "id": target_cand.id,
+                    "name": target_cand.name,
+                    "email": target_cand.email,
+                    "skills": target_cand.skills,
+                    "experience": target_cand.experience,
+                    "education": target_cand.education
+                }
+
+        system_prompt = f"""
+You are TalentAI, an intelligent, professional AI Recruitment Assistant for technical hiring teams and recruiters.
+You assist with candidate screening, skill matching, interview question generation, candidate comparisons, and job description advice.
+
+IMPORTANT OPERATIONAL RULES:
+1. Ground your answers STRICTLY in the real database context provided below.
+2. DO NOT make up candidate names, experience, or skills that are not present in the database.
+3. If the recruiter asks about a candidate or job not in the database, politely inform them that no matching record exists in the system.
+4. When suggesting interview questions, tailor them specifically to the candidate's actual skills and the job's requirements.
+5. When comparing candidates, be objective, highlighting specific skill overlaps and potential gaps.
+6. NEVER expose API keys, database connection strings, passwords, or recruiter secrets.
+7. Format answers cleanly using GitHub-style markdown, bold highlights, and structured bullet points.
+
+=== REAL DATABASE CONTEXT ===
+Total Candidates in Database: {len(candidates)}
+Total Jobs in Database: {len(jobs)}
+Total Applications: {len(applications)}
+
+Active Jobs in System:
+{json.dumps(jobs_context, indent=2)}
+
+Registered Candidates in System:
+{json.dumps(candidates_context, indent=2)}
+"""
+        if selected_job_info:
+            system_prompt += f"\nCurrently Focused Job:\n{json.dumps(selected_job_info, indent=2)}\n"
+
+        if selected_candidate_info:
+            system_prompt += f"\nCurrently Focused Candidate:\n{json.dumps(selected_candidate_info, indent=2)}\n"
+
+        # Build messages payload including recent history
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ]
+
+        if data.history and isinstance(data.history, list):
+            for turn in data.history[-6:]:
+                role = turn.get("role", "user")
+                content = turn.get("content", "")
+                if content and role in ["user", "assistant"]:
+                    messages.append({"role": role, "content": content})
+
+        messages.append({"role": "user", "content": data.message})
+
+        # Generate response using Groq
+        reply = chat_with_groq(messages, temperature=0.3, max_tokens=2000)
+
+        return {
+            "reply": reply,
+            "job_id": data.job_id,
+            "candidate_id": data.candidate_id
+        }
+    except Exception as e:
+        print(f"Chat error: {e}")
+        # Graceful fallback response
+        return {
+            "reply": f"I encountered a temporary processing issue: {str(e)}. However, based on our database, we currently have {len(candidates)} candidate(s) and {len(jobs)} active job posting(s). Please try asking again or select a specific job.",
+            "error": str(e)
+        }
+    finally:
+        db.close()

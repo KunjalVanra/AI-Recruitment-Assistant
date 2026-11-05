@@ -6,18 +6,49 @@ load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY not found in .env file")
-
 
 client = Groq(
     api_key=GROQ_API_KEY
 )
 
+PRIMARY_MODEL = "openai/gpt-oss-120b"
+FALLBACK_MODEL = "openai/gpt-oss-20b"
+
+
+def chat_with_groq(messages, temperature=0.2, max_tokens=2500):
+    """
+    Execute chat completion with Groq with automatic fallback.
+    """
+    try:
+        response = client.chat.completions.create(
+            model=PRIMARY_MODEL,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        content = response.choices[0].message.content
+        if content and content.strip():
+            return content
+    except Exception as e:
+        print(f"Warning: Primary Groq model {PRIMARY_MODEL} error: {e}")
+
+    # Fallback attempt
+    try:
+        response = client.chat.completions.create(
+            model=FALLBACK_MODEL,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content or ""
+    except Exception as e2:
+        print(f"Warning: Fallback Groq model error: {e2}")
+        raise e2
+
 
 def analyze_resume(resume_text):
-
     prompt = f"""
 You are an AI recruitment assistant.
 
@@ -57,17 +88,11 @@ Rules:
 Resume:
 {resume_text}
 """
+    messages = [
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ]
 
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        temperature=0.1,
-        max_tokens=4000,
-    )
-
-    return response.choices[0].message.content
+    return chat_with_groq(messages, temperature=0.1, max_tokens=4000)
